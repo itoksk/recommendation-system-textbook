@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.env
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Data
+data/output/
+data/sample/*.csv
+visualizations/output/
+projects/output/
+*.pkl
+*.pickle
+
+# Logs
+*.log
+
+# Virtual Environment
+bin/
+include/
+lib/
+lib64/
+share/
+pyvenv.cfg
