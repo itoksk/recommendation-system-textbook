@@ -1,108 +1,69 @@
-# 🚀 推薦システム完全マスター教科書
-〜高校生からプロまで、X(Twitter)のアルゴリズムで学ぶ実践的推薦技術〜
+# X's Recommendation Algorithm
 
-## 📚 この教科書について
+X's Recommendation Algorithm is a set of services and jobs that are responsible for serving feeds of posts and other content across all X product surfaces (e.g. For You Timeline, Search, Explore, Notifications). For an introduction to how the algorithm works, please refer to our [engineering blog](https://blog.x.com/engineering/en_us/topics/open-source/2023/twitter-recommendation-algorithm).
 
-この教科書は、X(Twitter)の実際のアルゴリズムを題材に、推薦システムを基礎から実践まで学べる完全ガイドです。
-プログラミング初心者の高校生でも、段階的に学習することで、最終的には本格的な推薦システムを構築できるようになります。
+## Architecture
 
-## 🎯 学習目標
+Product surfaces at X are built on a shared set of data, models, and software frameworks. The shared components included in this repository are listed below:
 
-この教科書を完了すると、以下ができるようになります：
+| Type | Component | Description |
+|------------|------------|------------|
+| Data | [tweetypie](tweetypie/server/README.md) | Core service that handles the reading and writing of post data. |
+|      | [unified-user-actions](unified_user_actions/README.md) | Real-time stream of user actions on X. |
+|      | [user-signal-service](user-signal-service/README.md) | Centralized platform to retrieve explicit (e.g. likes, replies) and implicit (e.g. profile visits, tweet clicks) user signals. |
+| Model | [SimClusters](src/scala/com/twitter/simclusters_v2/README.md) | Community detection and sparse embeddings into those communities. |
+|       | [TwHIN](https://github.com/twitter/the-algorithm-ml/blob/main/projects/twhin/README.md) | Dense knowledge graph embeddings for Users and Posts. |
+|       | [trust-and-safety-models](trust_and_safety_models/README.md) | Models for detecting NSFW or abusive content. |
+|       | [real-graph](src/scala/com/twitter/interaction_graph/README.md) | Model to predict the likelihood of an X User interacting with another User. |
+|       | [tweepcred](src/scala/com/twitter/graph/batch/job/tweepcred/README) | Page-Rank algorithm for calculating X User reputation. |
+|       | [recos-injector](recos-injector/README.md) | Streaming event processor for building input streams for [GraphJet](https://github.com/twitter/GraphJet) based services. |
+|       | [graph-feature-service](graph-feature-service/README.md) | Serves graph features for a directed pair of users (e.g. how many of User A's following liked posts from User B). |
+|       | [topic-social-proof](topic-social-proof/README.md) | Identifies topics related to individual posts. |
+|       | [representation-scorer](representation-scorer/README.md) | Compute scores between pairs of entities (Users, Posts, etc.) using embedding similarity. |
+| Software framework | [navi](navi/README.md) | High performance, machine learning model serving written in Rust. |
+|                    | [product-mixer](product-mixer/README.md) | Software framework for building feeds of content. |
+|                    | [timelines-aggregation-framework](timelines/data_processing/ml_util/aggregation_framework/README.md) | Framework for generating aggregate features in batch or real time. |
+|                    | [representation-manager](representation-manager/README.md) | Service to retrieve embeddings (i.e. SimClusers and TwHIN). |
+|                    | [twml](twml/README.md) | Legacy machine learning framework built on TensorFlow v1. |
 
-1. **基礎理解**: 推薦システムの仕組みと重要性を理解
-2. **実装スキル**: Pythonで実際に動く推薦システムを構築
-3. **応用力**: TwitterやYouTubeのような大規模システムの設計を理解
-4. **実践力**: 自分のアイデアを推薦システムとして実装
+The product surfaces currently included in this repository are the For You Timeline and Recommended Notifications.
 
-## 📖 目次
+### For You Timeline
 
-### 第1部：基礎編（高校生レベル）
-- [Chapter 1: 推薦システムって何？](chapters/chapter01_introduction.md)
-  - 日常生活の推薦システム
-  - なぜ推薦が必要なのか
-  - 簡単な例で理解する
+The diagram below illustrates how major services and jobs interconnect to construct a For You Timeline.
 
-- [Chapter 2: はじめての推薦システム](chapters/chapter02_first_recommender.md)
-  - Pythonの基礎
-  - 人気ランキングを作ろう
-  - ユーザーの好みを記録する
+![](docs/system-diagram.png)
 
-### 第2部：実践編（大学生レベル）
-- [Chapter 3: 協調フィルタリング](chapters/chapter03_collaborative_filtering.md)
-  - 「似た人」を見つける方法
-  - SimClustersの基本概念
-  - 実装してみよう
+The core components of the For You Timeline included in this repository are listed below:
 
-- [Chapter 4: 特徴量とランキング](chapters/chapter04_features_ranking.md)
-  - 特徴量エンジニアリング
-  - Light RankerとHeavy Ranker
-  - 機械学習の導入
+| Type | Component | Description |
+|------------|------------|------------|
+| Candidate Source | [search-index](src/java/com/twitter/search/README.md) | Find and rank In-Network posts. ~50% of posts come from this candidate source. |
+|                  | [tweet-mixer](tweet-mixer) | Coordination layer for fetching Out-of-Network tweet candidates from underlying compute services. |
+|                  | [user-tweet-entity-graph](src/scala/com/twitter/recos/user_tweet_entity_graph/README.md) (UTEG)| Maintains an in memory User to Post interaction graph, and finds candidates based on traversals of this graph. This is built on the [GraphJet](https://github.com/twitter/GraphJet) framework. Several other GraphJet based features and candidate sources are located [here](src/scala/com/twitter/recos). |
+|                  | [follow-recommendation-service](follow-recommendations-service/README.md) (FRS)| Provides Users with recommendations for accounts to follow, and posts from those accounts. |
+| Ranking | [light-ranker](src/python/twitter/deepbird/projects/timelines/scripts/models/earlybird/README.md) | Light Ranker model used by search index (Earlybird) to rank posts. |
+|         | [heavy-ranker](https://github.com/twitter/the-algorithm-ml/blob/main/projects/home/recap/README.md) | Neural network for ranking candidate posts. One of the main signals used to select timeline posts post candidate sourcing. |
+| Post mixing & filtering | [home-mixer](home-mixer/README.md) | Main service used to construct and serve the Home Timeline. Built on [product-mixer](product-mixer/README.md). |
+|                          | [visibility-filters](visibilitylib/README.md) | Responsible for filtering X content to support legal compliance, improve product quality, increase user trust, protect revenue through the use of hard-filtering, visible product treatments, and coarse-grained downranking. |
+|                          | [timelineranker](timelineranker/README.md) | Legacy service which provides relevance-scored posts from the Earlybird Search Index and UTEG service. |
 
-### 第3部：応用編（エンジニアレベル）
-- [Chapter 5: スケーラブルな設計](chapters/chapter05_scalable_design.md)
-  - リアルタイム処理
-  - 分散システム
-  - Product Mixerパターン
+### Recommended Notifications
 
-- [Chapter 6: 実践プロジェクト](chapters/chapter06_final_project.md)
-  - ミニTwitterを作ろう
-  - A/Bテストの実装
-  - パフォーマンス最適化
+The core components of Recommended Notifications included in this repository are listed below:
 
-## 🛠 環境構築
+| Type | Component | Description |
+|------------|------------|------------|
+| Service | [pushservice](pushservice/README.md) | Main recommendation service at X used to surface recommendations to our users via notifications.
+| Ranking | [pushservice-light-ranker](pushservice/src/main/python/models/light_ranking/README.md) | Light Ranker model used by pushservice to rank posts. Bridges candidate generation and heavy ranking by pre-selecting highly-relevant candidates from the initial huge candidate pool. |
+|         | [pushservice-heavy-ranker](pushservice/src/main/python/models/heavy_ranking/README.md) | Multi-task learning model to predict the probabilities that the target users will open and engage with the sent notifications. |
 
-```bash
-# 必要なツール
-- Python 3.8以上
-- Visual Studio Code（推奨）
-- Git
+## Build and test code
 
-# セットアップ
-cd recommendation-textbook
-pip install -r requirements.txt
-python setup.py
-```
+We include Bazel BUILD files for most components, but not a top-level BUILD or WORKSPACE file. We plan to add a more complete build and test system in the future.
 
-## 📝 学習の進め方
+## Contributing
 
-1. **章を順番に読む**: 各章は前の章の知識を前提としています
-2. **コードを実行**: `code/`フォルダの例を実際に動かしてみる
-3. **演習問題を解く**: `exercises/`フォルダの問題にチャレンジ
-4. **プロジェクトを作る**: `projects/`フォルダの課題を完成させる
-5. **解答を確認**: `solutions/`フォルダで答え合わせ
+We invite the community to submit GitHub issues and pull requests for suggestions on improving the recommendation algorithm. We are working on tools to manage these suggestions and sync changes to our internal repository. Any security concerns or issues should be routed to our official [bug bounty program](https://hackerone.com/x) through HackerOne. We hope to benefit from the collective intelligence and expertise of the global community in helping us identify issues and suggest improvements, ultimately leading to a better X.
 
-## 🎮 インタラクティブデモ
-
-```bash
-# デモを起動
-python visualizations/demo.py
-
-# Webブラウザで開く
-http://localhost:8000
-```
-
-## 📊 学習進捗チェックリスト
-
-- [ ] Chapter 1を読んで基本概念を理解
-- [ ] Chapter 2でPythonの基礎を学習
-- [ ] 初めての推薦システムを実装
-- [ ] 協調フィルタリングを理解・実装
-- [ ] 機械学習モデルを導入
-- [ ] 最終プロジェクト完成
-- [ ] 自分のアイデアで推薦システムを作成
-
-## 🤝 サポート
-
-- 質問がある場合: `discussions/`フォルダにQ&A集があります
-- バグを見つけた場合: Issueを作成してください
-- 改善提案: Pull Requestを歓迎します
-
-## 📜 ライセンス
-
-この教科書はAGPL-3.0ライセンスの下で公開されています。
-教育目的での利用を推奨します。
-
----
-
-**さあ、推薦システムの世界へ飛び込もう！** 🚀
+Read our blog on the open source initiative [here](https://blog.x.com/en_us/topics/company/2023/a-new-era-of-transparency-for-twitter).
